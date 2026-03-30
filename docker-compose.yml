@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  mah-a-brain:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./vault:/app/vault
+    environment:
+      - LLM_MODEL=llama3.2
+      - LOG_LEVEL=INFO
+    restart: unless-stopped

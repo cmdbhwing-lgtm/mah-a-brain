@@ -1,197 +1,174 @@
 # Mah-a-Brain
 
-A deployable LLM agent with persistent memory, real-time telemetry, API-key billing, file ingestion watching, and CAD generation with downloadable file links.
-
-## Features
-
-| Feature | Description |
-|---|---|
-| **LLM Chat** | Local inference via [Ollama](https://ollama.com) with configurable model and RAG-enhanced context |
-| **Persistent Memory** | ChromaDB vector store -- the agent recalls past interactions automatically |
-| **Memory Ingestion** | Feed domain knowledge via `/api/memory/leach` |
-| **Real-time Telemetry** | WebSocket at `/ws/telemetry` streams CPU, memory doc count, heartbeats |
-| **File Watcher** | Files dropped into `vault/ingestion/` are broadcast to all telemetry clients |
-| **API-key Billing** | Create tenants, assign credits, auto-debit per call |
-| **CAD Generation** | OpenSCAD-based STL generation with **downloadable file links** |
-| **CAD File Browser** | List and download all generated CAD files via `/api/cad/list` |
-| **Docker Ready** | Single `docker compose up` to run everything |
+A deployable LLM agent with persistent memory, real-time telemetry, API-key billing, and CAD generation.
 
 ---
 
-## Installation
+## Download & Install
 
-### Method 1: One-Line Installer (recommended)
+### Step 1: Download
+
+**Option A -- Download ZIP (easiest, no git needed):**
+
+Go to **https://github.com/cmdbhwing-lgtm/mah-a-brain/archive/refs/heads/main.zip**, save the ZIP, and unzip it.
+
+Or from terminal:
+
+```bash
+wget https://github.com/cmdbhwing-lgtm/mah-a-brain/archive/refs/heads/main.zip
+unzip main.zip
+cd mah-a-brain-main
+```
+
+**Option B -- Clone with git:**
+
+```bash
+git clone https://github.com/cmdbhwing-lgtm/mah-a-brain.git
+cd mah-a-brain
+```
+
+**Option C -- One command (auto-installs everything):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cmdbhwing-lgtm/mah-a-brain/main/install.sh | bash
 ```
 
-This auto-detects your environment:
-- If **Docker** is available, it builds and runs a container.
-- Otherwise, it creates a **Python virtual environment** and installs dependencies.
+This detects your system and sets everything up. Skip to Step 3 if you use this.
 
-You can customize the install location and port:
+### Step 2: Install & Run
 
-```bash
-MAB_INSTALL_DIR=/opt/mah-a-brain MAB_PORT=9090 bash install.sh
-```
+Pick whichever method matches your setup:
 
-### Method 2: Docker Compose
+**With Docker (recommended -- nothing else to install):**
 
 ```bash
-git clone https://github.com/cmdbhwing-lgtm/mah-a-brain.git
-cd mah-a-brain
 docker compose up --build -d
 ```
 
-Data persists in `./data` and `./vault` on the host. To stop: `docker compose down`.
+Done. The server is running at `http://localhost:8080`.
 
-### Method 3: Docker (standalone)
-
-```bash
-git clone https://github.com/cmdbhwing-lgtm/mah-a-brain.git
-cd mah-a-brain
-docker build -t mah-a-brain .
-docker run -d -p 8080:8080 -v $(pwd)/data:/app/data -v $(pwd)/vault:/app/vault mah-a-brain
-```
-
-### Method 4: Python Virtual Environment
+**Without Docker (plain Python):**
 
 ```bash
-git clone https://github.com/cmdbhwing-lgtm/mah-a-brain.git
-cd mah-a-brain
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-mkdir -p data vault/cad vault/memory vault/ingestion
-uvicorn main:app --host 0.0.0.0 --port 8080
+python3 main.py
 ```
 
-### Method 5: pip install (system-wide)
+The server is running at `http://localhost:8080`.
+
+### Step 3: Verify it works
+
+Open your browser to **http://localhost:8080/docs** for the interactive API dashboard.
+
+Or from terminal:
 
 ```bash
-git clone https://github.com/cmdbhwing-lgtm/mah-a-brain.git
-cd mah-a-brain
-pip install -r requirements.txt
-python main.py
+curl http://localhost:8080/api/health
 ```
 
-### Optional: Enable LLM Support
+You should see:
 
-Install Ollama for local LLM inference:
+```json
+{"status": "ok", "version": "1.0.0", "cpu_percent": 2.5, "ollama_available": false, "chroma_available": true, "memory_docs": 0}
+```
+
+### Step 4 (optional): Enable LLM chat
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2
 ```
 
+Restart the server. Now `/api/chat` will use the local LLM with memory-enhanced responses.
+
 ---
 
-## API Reference
+## What You Can Do
 
-Once running, full interactive docs are available at `http://localhost:8080/docs` (Swagger UI).
+| Endpoint | What it does |
+|---|---|
+| `GET /api/health` | Check system status |
+| `POST /api/chat` | Chat with local LLM (memory-enhanced) |
+| `POST /api/memory/leach` | Feed knowledge into the AI's memory |
+| `GET /api/memory/search?query=...` | Search stored memories |
+| `POST /api/cad/generate` | Generate a 3D model (STL file) |
+| `GET /api/cad/list` | List all generated CAD files with download links |
+| `GET /api/cad/download/{job_id}` | Download a generated STL/SCAD file |
+| `POST /api/tenants` | Create an API key with credits |
+| `GET /api/tenants/{key}/credits` | Check remaining credits |
+| `ws://localhost:8080/ws/telemetry` | Live CPU/memory/event stream |
 
-### Health
+Full interactive docs: **http://localhost:8080/docs**
 
-```
-GET /api/health
-```
+---
 
-Returns system status, CPU usage, and feature availability flags.
+## Examples
 
-### Chat (with memory recall)
+**Chat with the AI:**
 
-```
-POST /api/chat
-Content-Type: application/json
-
-{"prompt": "Explain quantum computing", "api_key": ""}
-```
-
-If ChromaDB is loaded, past interactions are recalled and injected as context. The `api_key` field is optional; when provided, credits are debited.
-
-### Memory
-
-```
-POST /api/memory/leach
-{"text": "Domain-specific knowledge...", "source_name": "manual"}
-
-GET /api/memory/search?query=quantum&n=5
+```bash
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is quantum computing?"}'
 ```
 
-### CAD Generation with Download Links
+**Feed it knowledge:**
 
-```
-POST /api/cad/generate?api_key=
-```
-
-Returns a response with a `download_url` field:
-
-```json
-{
-  "status": "ok",
-  "job_id": "cad_a1b2c3d4e5f6",
-  "file": "vault/cad/cad_a1b2c3d4e5f6.stl",
-  "message": "STL generated",
-  "download_url": "/api/cad/download/cad_a1b2c3d4e5f6"
-}
+```bash
+curl -X POST http://localhost:8080/api/memory/leach \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Our company sells red widgets for $5 each.", "source_name": "product-info"}'
 ```
 
-**Download a file:**
+**Generate a 3D model and download it:**
 
-```
-GET /api/cad/download/{job_id}
-```
+```bash
+# Generate
+curl -X POST http://localhost:8080/api/cad/generate
 
-Returns the STL file as a binary download. Falls back to SCAD if STL was not generated.
+# The response includes a download_url. Use it:
+curl -O http://localhost:8080/api/cad/download/cad_abc123
+```
 
 **List all generated files:**
 
+```bash
+curl http://localhost:8080/api/cad/list
 ```
-GET /api/cad/list
-```
-
-Returns all CAD files with download links:
-
-```json
-{
-  "files": [
-    {"job_id": "cad_a1b2c3", "filename": "cad_a1b2c3.stl", "size_bytes": 4096, "download_url": "/api/cad/download/cad_a1b2c3"}
-  ],
-  "count": 1
-}
-```
-
-### Tenants / Billing
-
-```
-POST /api/tenants          -- create a new API key
-GET  /api/tenants/{key}/credits  -- check remaining credits
-```
-
-### Telemetry WebSocket
-
-```
-ws://localhost:8080/ws/telemetry
-```
-
-Streams periodic CPU usage, memory document count, and event notifications.
 
 ---
 
 ## Configuration
 
-All settings are controlled via environment variables:
+Set these environment variables to customize behavior:
 
-| Variable | Default | Description |
+| Variable | Default | What it does |
 |---|---|---|
-| `LLM_MODEL` | `llama3.2` | Ollama model name |
-| `DATA_DIR` | `data` | SQLite database directory |
-| `VAULT_CAD_DIR` | `vault/cad` | CAD output directory |
-| `VAULT_MEMORY_DIR` | `vault/memory` | ChromaDB persistence directory |
-| `VAULT_INGESTION_DIR` | `vault/ingestion` | Watched directory for file drops |
-| `CREDIT_COST` | `1.5` | Credits debited per authenticated API call |
-| `LOG_LEVEL` | `INFO` | Python logging level |
+| `LLM_MODEL` | `llama3.2` | Which Ollama model to use |
+| `DATA_DIR` | `data` | Where databases are stored |
+| `VAULT_CAD_DIR` | `vault/cad` | Where CAD files go |
+| `VAULT_MEMORY_DIR` | `vault/memory` | Where ChromaDB stores memories |
+| `VAULT_INGESTION_DIR` | `vault/ingestion` | Drop files here to trigger events |
+| `CREDIT_COST` | `1.5` | Credits per authenticated API call |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+
+---
+
+## Stopping / Restarting
+
+**Docker:**
+
+```bash
+docker compose down          # stop
+docker compose up -d         # restart
+docker compose logs -f       # view logs
+```
+
+**Python:**
+
+Press `Ctrl+C` to stop, then run `python3 main.py` again to restart.
 
 ---
 
@@ -204,19 +181,19 @@ pytest tests/ -v
 
 ---
 
-## Architecture
+## Project Structure
 
 ```
-main.py              -- FastAPI application (single-file for simplicity)
+main.py              -- The entire backend (single file, ~500 lines)
 requirements.txt     -- Python dependencies
-Dockerfile           -- Container image with OpenSCAD
+Dockerfile           -- Container build
 docker-compose.yml   -- One-command deployment
-install.sh           -- Auto-detecting installer script
-tests/test_api.py    -- API integration tests
-data/                -- SQLite databases (billing, interactions)
-vault/cad/           -- Generated SCAD/STL files (downloadable)
-vault/memory/        -- ChromaDB persistent storage
-vault/ingestion/     -- Drop files here; watcher broadcasts events
+install.sh           -- Auto-detecting installer
+tests/test_api.py    -- 10 integration tests
+data/                -- Databases (auto-created)
+vault/cad/           -- Generated 3D files (downloadable)
+vault/memory/        -- AI memory storage
+vault/ingestion/     -- File drop zone (watched for events)
 ```
 
 ## License

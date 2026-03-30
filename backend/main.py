@@ -4,20 +4,21 @@ Level 1: Foundation API with live system metrics and WebSocket telemetry.
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
 import asyncio
-import json
-import os
+import logging
 import platform
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import psutil
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger("vajra")
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +35,10 @@ class ConnectionManager:
         self.active_connections.append(ws)
 
     def disconnect(self, ws: WebSocket) -> None:
-        self.active_connections.remove(ws)
+        try:
+            self.active_connections.remove(ws)
+        except ValueError:
+            pass  # Already removed by broadcast cleanup
 
     async def broadcast(self, data: Dict[str, Any]) -> None:
         stale: List[WebSocket] = []
@@ -44,7 +48,10 @@ class ConnectionManager:
             except Exception:
                 stale.append(conn)
         for conn in stale:
-            self.active_connections.remove(conn)
+            try:
+                self.active_connections.remove(conn)
+            except ValueError:
+                pass
 
 
 manager = ConnectionManager()
@@ -56,8 +63,13 @@ _metrics_task: Optional[asyncio.Task] = None
 async def _broadcast_metrics_loop() -> None:
     """Push system metrics to all connected WebSocket clients every 2s."""
     while True:
-        payload = _collect_system_metrics()
-        await manager.broadcast(payload)
+        try:
+            payload = _collect_system_metrics()
+            await manager.broadcast(payload)
+        except asyncio.CancelledError:
+            raise  # Let cancellation propagate
+        except Exception:
+            logger.exception("Error in metrics broadcast loop")
         await asyncio.sleep(2)
 
 
@@ -122,13 +134,14 @@ def _collect_system_metrics() -> Dict[str, Any]:
         )
         if result.returncode == 0 and result.stdout.strip():
             parts = [p.strip() for p in result.stdout.strip().split(",")]
-            gpu_info = {
-                "name": parts[0],
-                "utilization_pct": float(parts[1]),
-                "memory_used_mb": float(parts[2]),
-                "memory_total_mb": float(parts[3]),
-                "temperature_c": float(parts[4]),
-            }
+            if len(parts) >= 5:
+                gpu_info = {
+                    "name": parts[0],
+                    "utilization_pct": float(parts[1]),
+                    "memory_used_mb": float(parts[2]),
+                    "memory_total_mb": float(parts[3]),
+                    "temperature_c": float(parts[4]),
+                }
     except Exception:
         pass
 
@@ -210,7 +223,9 @@ async def ws_metrics(ws: WebSocket):
             data = await ws.receive_text()
             if data == "ping":
                 await ws.send_json({"pong": True})
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError, ConnectionResetError):
+        pass
+    finally:
         manager.disconnect(ws)
 
 

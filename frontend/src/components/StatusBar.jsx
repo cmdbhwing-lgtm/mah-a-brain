@@ -1,15 +1,16 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 
 /**
- * macOS-style top menu/status bar.
+ * macOS-style top menu/status bar with a live-updating clock.
  */
 export default function StatusBar({ connected }) {
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
+  const [timeStr, setTimeStr] = useState(() => formatTime());
+
+  useEffect(() => {
+    const id = setInterval(() => setTimeStr(formatTime()), 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 h-8 flex items-center justify-between px-5 bg-black/40 backdrop-blur-[20px] border-b border-vajra-border text-xs select-none">
@@ -41,4 +42,12 @@ export default function StatusBar({ connected }) {
       </div>
     </div>
   );
+}
+
+function formatTime() {
+  return new Date().toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }

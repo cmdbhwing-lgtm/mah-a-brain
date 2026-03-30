@@ -19,6 +19,7 @@ from typing import Optional
 import psutil
 from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from rich.console import Console
 from watchdog.events import FileSystemEventHandler
@@ -232,6 +233,7 @@ class CADResponse(BaseModel):
     job_id: str = ""
     file: str = ""
     message: str = ""
+    download_url: str = ""
 
 
 class TenantCreate(BaseModel):
@@ -397,7 +399,50 @@ async def generate_cad(api_key: str = "") -> CADResponse:
         return CADResponse(status="error", job_id=job_id, message=f"OpenSCAD failed: {exc.stderr.decode()}")
 
     await broadcast(f"[cad] generated {job_id}")
-    return CADResponse(status="ok", job_id=job_id, file=str(stl_path), message="STL generated")
+    return CADResponse(
+        status="ok",
+        job_id=job_id,
+        file=str(stl_path),
+        message="STL generated",
+        download_url=f"/api/cad/download/{job_id}",
+    )
+
+
+@app.get("/api/cad/download/{job_id}")
+async def download_cad_file(job_id: str) -> FileResponse:
+    """Download a previously generated STL file by job ID."""
+    stl_path = VAULT_CAD_DIR / f"{job_id}.stl"
+    if not stl_path.exists():
+        # Fall back to .scad if STL was not generated (e.g. OpenSCAD missing)
+        scad_path = VAULT_CAD_DIR / f"{job_id}.scad"
+        if scad_path.exists():
+            return FileResponse(
+                path=str(scad_path),
+                media_type="application/x-openscad",
+                filename=f"{job_id}.scad",
+            )
+        raise HTTPException(status_code=404, detail=f"No CAD files found for job {job_id}")
+    return FileResponse(
+        path=str(stl_path),
+        media_type="application/sla",
+        filename=f"{job_id}.stl",
+    )
+
+
+@app.get("/api/cad/list")
+async def list_cad_files() -> dict:
+    """List all generated CAD files with download links."""
+    files = []
+    for f in sorted(VAULT_CAD_DIR.iterdir()):
+        if f.suffix in (".stl", ".scad"):
+            job_id = f.stem
+            files.append({
+                "job_id": job_id,
+                "filename": f.name,
+                "size_bytes": f.stat().st_size,
+                "download_url": f"/api/cad/download/{job_id}",
+            })
+    return {"files": files, "count": len(files)}
 
 
 # -- Tenant management ---------------------------------------------------------

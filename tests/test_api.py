@@ -60,6 +60,24 @@ def test_cad_generate(client: TestClient):
     body = resp.json()
     assert body["status"] in ("ok", "error")
     assert "job_id" in body
+    # Should always include a download_url field
+    assert "download_url" in body
+
+
+def test_cad_download_not_found(client: TestClient):
+    """Requesting a download for a non-existent job returns 404."""
+    resp = client.get("/api/cad/download/nonexistent_job")
+    assert resp.status_code == 404
+
+
+def test_cad_list(client: TestClient):
+    """CAD list endpoint returns a list structure."""
+    resp = client.get("/api/cad/list")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "files" in body
+    assert "count" in body
+    assert isinstance(body["files"], list)
 
 
 def test_memory_leach_without_chroma(client: TestClient):

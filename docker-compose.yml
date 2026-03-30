@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  vajra:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount backend source for live reload during development
+      - ./backend:/code/backend
+      - ./main.py:/code/main.py
+    environment:
+      - VAJRA_ENV=development
+    restart: unless-stopped

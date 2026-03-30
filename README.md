@@ -85,6 +85,43 @@ Restart the server. Now `/api/chat` will use the local LLM with memory-enhanced 
 
 ---
 
+## 4 Ways to See Output
+
+### 1. Browser Dashboard (visual UI)
+
+Open **http://localhost:8080/dashboard** in any browser. You get:
+- Live CPU and memory doc metrics
+- Chat input box (type a prompt, see the AI reply)
+- "Generate CAD" button with clickable download links
+- Real-time telemetry log (WebSocket stream)
+
+### 2. Swagger API Docs (interactive testing)
+
+Open **http://localhost:8080/docs** -- click any endpoint, fill in parameters, hit "Execute", and see the JSON response.
+
+### 3. CLI Tool (terminal output)
+
+```bash
+python3 cli.py health                          # system status
+python3 cli.py chat "What is gravity?"         # chat with AI
+python3 cli.py leach "Our product costs $5"    # feed knowledge
+python3 cli.py search "product"                # search memory
+python3 cli.py cad                             # generate CAD + get download link
+python3 cli.py files                           # list all files with download URLs
+python3 cli.py telemetry                       # live stream in terminal
+```
+
+Change the server address with `--base http://your-server:8080`.
+
+### 4. curl / any HTTP client
+
+```bash
+curl http://localhost:8080/api/health
+curl -X POST http://localhost:8080/api/chat -H "Content-Type: application/json" -d '{"prompt":"hello"}'
+```
+
+---
+
 ## What You Can Do
 
 | Endpoint | What it does |

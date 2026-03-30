@@ -497,6 +497,18 @@ async def telemetry_websocket(ws: WebSocket) -> None:
         logger.info("Telemetry client disconnected (%d remaining)", len(active_websockets))
 
 
+# -- Serve dashboard HTML ------------------------------------------------------
+
+
+@app.get("/dashboard")
+async def serve_dashboard():
+    """Serve the browser-based dashboard UI."""
+    dashboard_path = Path(__file__).parent / "dashboard.html"
+    if not dashboard_path.exists():
+        raise HTTPException(status_code=404, detail="dashboard.html not found")
+    return FileResponse(str(dashboard_path), media_type="text/html")
+
+
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
